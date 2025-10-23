@@ -13,6 +13,10 @@
    (left :initarg :left :accessor binary-op-left)            
    (right :initarg :right :accessor binary-op-right)))
 
+(defclass unary-op-node (ast-node)
+  ((operator :initarg :operator :accessor unary-op-operator)
+   (right :initarg :right :accessor unary-op-right)))
+
 (defclass function-call-node (ast-node)
   ((function-name :initarg :function-name :accessor function-call-name)
    (arguments :initarg :arguments :accessor function-call-arguments)))
@@ -73,6 +77,9 @@
   (make-instance 'binary-op-node :operator operator :left left :right right 
                                   :line line :column column))
 
+(defun make-unary-op (operator right &key (line 1) (column 1))
+  (make-instance 'unary-op-node :operator operator :right right :line line :column column))
+
 (defun make-function-call (name arguments &key (line 1) (column 1))
   (make-instance 'function-call-node :function-name name :arguments arguments
                                      :line line :column column))
@@ -88,7 +95,7 @@
 (defun make-return (value &key (line 1) (column 1))
   (make-instance 'return-node :value value :line line :column column))
 
-(defun make-if (condition then-branch &optional else-branch (line 1) (column 1))
+(defun make-if (condition then-branch else-branch &key (line 1) (column 1))
   (make-instance 'if-node :condition condition :then-branch then-branch 
                           :else-branch else-branch :line line :column column))
 
@@ -137,6 +144,12 @@
             (binary-op-left node)
             (binary-op-operator node)
             (binary-op-right node))))
+
+(defmethod print-object ((node unary-op-node) stream)
+  (print-unreadable-object (node stream :type t)
+    (format stream "~A~A" 
+            (unary-op-operator node)
+            (unary-op-right node))))
 
 (defmethod print-object ((node function-call-node) stream)
   (print-unreadable-object (node stream :type t)
