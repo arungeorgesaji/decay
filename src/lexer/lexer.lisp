@@ -105,7 +105,10 @@
                (setf has-decimal-point t))
              (advance lexer))
     
-    (let ((value (subseq (lexer-source lexer) start (lexer-position lexer))))
+    (let* ((value-str (subseq (lexer-source lexer) start (lexer-position lexer)))
+           (value (if has-decimal-point
+                      (read-from-string value-str)
+                      (parse-integer value-str))))
       (make-token :type (if has-decimal-point :float :integer)
                   :value value
                   :line line

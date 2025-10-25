@@ -246,15 +246,18 @@
     expr))
 
 (defmethod parse-unary ((parser parser))
-  (if (or (match parser :operator "-")
-          (match parser :operator "!"))
-      (let* ((token (parser-current-token parser))
-             (operator (token-value token))
-             (right (parse-unary parser)))
-        (make-unary-op operator right 
-                       :line (token-line token)
-                       :column (token-column token)))
-      (parse-primary parser)))
+  (let ((token (parser-current-token parser)))
+    (if (and token
+             (eq (token-type token) :operator)
+             (member (token-value token) '("-" "!") :test 'string=))
+        (progn
+          (advance parser) 
+          (let ((right (parse-unary parser)))
+            (make-unary-op (token-value token) right
+                           :line (token-line token)
+                           :column (token-column token))))
+        (parse-primary parser))))
+
 
 (defmethod parse-primary ((parser parser))
   (let ((token (parser-current-token parser)))

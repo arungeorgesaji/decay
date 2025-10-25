@@ -1,6 +1,6 @@
 (defstruct token
   (type nil :type symbol)      
-  (value nil :type string)     
+  (value nil)     
   (line 1 :type integer)       
   (column 1 :type integer))    
 
