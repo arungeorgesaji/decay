@@ -1,5 +1,12 @@
 (defgeneric evaluate (interpreter node))
 
+(defmethod evaluate :around ((interp interpreter) node)
+  (let ((result (call-next-method)))
+    (when (and (typep result 'decayable-object)
+               (not (gethash (object-hash result) (interpreter-decayable-registry interp))))
+      (register-decayable interp result))
+    result))
+
 (defun track-variable-type (interp var-name var-type)
   (setf (gethash var-name (interpreter-variable-types interp)) var-type))
 
@@ -17,32 +24,17 @@
   (consume-stability-budget interp :literal-access)
 
   (let ((value (literal-value node)))
-    (make-decayable value 
+    (make-decayable interp value 
                     :integrity (if (numberp value) 1.0 0.9)
                     :decay-rate (if (numberp value) 0.001 0.01))))
 
 (defmethod evaluate ((interp interpreter) (node variable-node))
   (let ((var-name (variable-name node)))
-    (multiple-value-bind (value found) (gethash var-name (interpreter-current-env interp))
-      (if found
-          (progn
-            (let ((cost-type (determine-variable-cost-type interp var-name)))
-              (check-stability-budget interp cost-type)
-              (consume-stability-budget interp cost-type))
-            (update-access-time value)
-            (apply-decay value)
-            value)
-          (multiple-value-bind (global-value global-found) 
-              (gethash var-name (interpreter-global-env interp))
-            (if global-found
-                (progn
-                  (let ((cost-type (determine-variable-cost-type interp var-name)))
-                    (check-stability-budget interp cost-type)
-                    (consume-stability-budget interp cost-type))
-                  (update-access-time global-value)
-                  (apply-decay global-value)
-                  global-value)
-                (error "Undefined variable: ~A" var-name)))))))
+    (let ((cost-type (determine-variable-cost-type interp var-name)))
+      (check-stability-budget interp cost-type)
+      (consume-stability-budget interp cost-type))
+    
+    (env-get-with-decay (interpreter-current-env interp) var-name interp)))
 
 (defmethod evaluate ((interp interpreter) (node function-call-node))
   (check-stability-budget interp :function-call)
@@ -56,7 +48,7 @@
       ((string= func-name "print")
        (let ((output (format nil "~{~A~^ ~}" (mapcar #'decayable-value arg-values))))
          (format t "~A~%" output)
-         (make-decayable output)))
+         (make-decayable interp output)))
       
       (t
        (multiple-value-bind (func-node found) 
@@ -71,16 +63,19 @@
 
   (let ((value (if (return-value node)
                    (evaluate interp (return-value node))
-                   (make-decayable nil))))
+                   (make-decayable interp nil))))
     (throw 'return value)))
 
 (defmethod evaluate ((interp interpreter) (node block-node))
   (let ((result nil))
     (dolist (stmt (block-statements node))
       (setf result (catch 'return (evaluate interp stmt)))
-      (when (typep result 'decayable)
+      (when (typep result 'decayable-object)
         (return-from evaluate result)))
-    (or result (make-decayable nil))))
+    (or result (make-decayable interp nil))))
+
+(defun object-hash (obj)
+  (sxhash obj))
 
 (defun update-access-time (decayable)
   (when *interpreter-instance*
@@ -97,7 +92,7 @@
          (operator (binary-op-operator node))
          (result (compute-binary-op operator left right)))
     
-    (make-decayable result :integrity (min (decayable-integrity left-obj) 
+    (make-decayable interp result :integrity (min (decayable-integrity left-obj) 
                                          (decayable-integrity right-obj)))))
 
 (defun coerce-to-number-if-possible (val)
@@ -134,7 +129,7 @@
          (right (decayable-value right-obj))
          (operator (unary-op-operator node))
          (result (compute-unary-op operator right)))
-    (make-decayable result :integrity (decayable-integrity right-obj))))
+    (make-decayable interp result :integrity (decayable-integrity right-obj))))
 
 (defun compute-unary-op (operator right)
   (case (intern operator)
@@ -164,13 +159,13 @@
   (let ((result nil))
     (loop while (not (= (decayable-value (evaluate interp (while-condition node))) 0))
           do (setf result (evaluate interp (while-body node))))
-    (or result (make-decayable nil))))
+    (or result (make-decayable interp nil))))
 
 (defmethod evaluate ((interp interpreter) (node block-node))
   (let ((result nil))
     (dolist (stmt (block-statements node))
       (setf result (evaluate interp stmt)))
-    (or result (make-decayable nil))))
+    (or result (make-decayable interp nil))))
 
 (defmethod evaluate ((interp interpreter) (node assignment-node))
   (check-stability-budget interp :variable-assignment)
@@ -180,7 +175,7 @@
          (value-obj (evaluate interp (assignment-value node)))
          (env (interpreter-current-env interp)))
     
-    (setf (gethash var-name env) value-obj)
+    (env-set-with-decay env var-name value-obj interp)
     value-obj))
 
 (defmethod evaluate ((interp interpreter) (node variable-decl-node))
@@ -197,12 +192,14 @@
                        (t 0.005))))
     
     (track-variable-type interp var-name var-type)
-    
+
     (setf (gethash var-name env) 
-          (make-decayable (decayable-value value-obj)
+          (make-decayable interp  
+                         (decayable-value value-obj)
                          :integrity (decayable-integrity value-obj)
                          :decay-rate decay-rate))
     value-obj))
+    
 
 (defun determine-variable-cost-type (interp var-name)
   (let ((var-type (get-variable-type interp var-name)))
@@ -217,7 +214,7 @@
 
   (let ((func-name (decl-func-name node)))
     (setf (gethash func-name (interpreter-global-env interp)) node)
-    (make-decayable func-name)))
+    (make-decayable interp func-name)))
 
 (defmethod evaluate ((interp interpreter) (node repair-node))
   (check-stability-budget interp :maintenance-operation)
@@ -227,7 +224,7 @@
     (format t "Repairing: ~A~%" target)
     (sleep 2.0)
     (restore-stability-budget interp 5.0)
-    (make-decayable (format nil "Repaired ~A" target))))
+    (make-decayable interp (format nil "Repaired ~A" target))))
 
 (defmethod evaluate ((interp interpreter) (node reinforce-node))
   (check-stability-budget interp :maintenance-operation)
@@ -237,7 +234,7 @@
     (format t "Reinforcing: ~A~%" target)
     ()
     (restore-stability-budget interp 2.0)
-    (make-decayable (format nil "Reinforced ~A" target))))
+    (make-decayable interp (format nil "Reinforced ~A" target))))
 
 (defmethod evaluate ((interp interpreter) (node accelerate-node))
   (check-stability-budget interp :maintenance-operation)
@@ -246,19 +243,19 @@
   (let ((target (accelerate-target node)))
     (format t "Accelerating: ~A~%" target)
     (restore-stability-budget interp 1.0)
-    (make-decayable (format nil "Accelerated ~A" target))))
+    (make-decayable interp (format nil "Accelerated ~A" target))))
 
 (defun execute-function-call (interp func-node arg-values)
   (let* ((params (decl-parameters func-node))
-         (body (decl-body func-node))
-         (new-env (make-hash-table :test 'equal)))
+       (body (decl-body func-node))
+       (new-env (make-child-environment (interpreter-global-env interp))))
     
     (loop for param in params
           for arg in arg-values
           do (setf (gethash param new-env) arg))
     
     (let ((old-env (interpreter-current-env interp))
-          (result (make-decayable nil)))
+          (result (make-decayable interp nil)))
       (unwind-protect
            (progn
              (setf (interpreter-current-env interp) new-env)
@@ -266,7 +263,7 @@
              (setf result 
                    (catch 'return
                      (evaluate interp body)
-                     (make-decayable nil))) 
+                     (make-decayable interp nil))) 
              )
         (setf (interpreter-current-env interp) old-env))
       result)))

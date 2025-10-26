@@ -60,10 +60,6 @@
 (defclass accelerate-node (ast-node)
   ((target :initarg :target :accessor accelerate-target)))
 
-(defclass health-check-node (ast-node)
-  ((check-type :initarg :check-type :accessor health-check-type)
-   (target :initarg :target :accessor health-check-target)))
-
 (defclass program-node (ast-node)
   ((statements :initarg :statements :accessor program-statements)))
 

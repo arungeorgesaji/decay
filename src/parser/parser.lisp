@@ -387,11 +387,4 @@
       ((typep node 'accelerate-node)
        (format t "~AACCELERATE: ~A~%" prefix (accelerate-target node)))
 
-      ((typep node 'health-check-node)
-       (format t "~AHEALTH-CHECK (~A) on ~A~%"
-               prefix
-               (health-check-type node)
-               (health-check-target node)))
-
-
       (t (format t "~A<UNKNOWN NODE> ~A~%" prefix node)))))

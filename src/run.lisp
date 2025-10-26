@@ -80,20 +80,20 @@ fast func process() {
         (format t "------------------------~%")
         (format t "Creating decayable objects...~%")
         
-        (let ((stable-var (make-decayable 42 :integrity 0.9 :decay-rate 0.001)))
+        (let ((stable-var (make-decayable interp 42 :integrity 0.9 :decay-rate 0.001)))
           (format t "Stable variable: value=~A, integrity=~,2f, decay-rate=~,3f~%"
                   (decayable-value stable-var)
                   (decayable-integrity stable-var)
                   (decayable-decay-rate stable-var)))
         
-        (let ((volatile-var (make-decayable "hello" :integrity 0.7 :decay-rate 0.1)))
+        (let ((volatile-var (make-decayable interp "hello" :integrity 0.7 :decay-rate 0.1)))
           (format t "Volatile variable: value=~A, integrity=~,2f, decay-rate=~,3f~%"
                   (decayable-value volatile-var)
                   (decayable-integrity volatile-var)
                   (decayable-decay-rate volatile-var)))
         
         (format t "~%Simulating corruption...~%")
-        (let ((test-number (make-decayable 100 :integrity 0.3))) 
+        (let ((test-number (make-decayable interp 100 :integrity 0.3))) 
           (format t "Before corruption: ~A~%" (decayable-value test-number))
           (corrupt-value test-number)
           (format t "After corruption: ~A~%" (decayable-value test-number)))
