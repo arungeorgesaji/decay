@@ -12,4 +12,4 @@
             (env-get parent key))))))
 
 (defun env-set (env key value)
-  (setf (gethash key env) value))
+e (setf (gethash key env) value))

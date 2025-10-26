@@ -73,7 +73,8 @@ fast func process() {
                   (decayable-value result)
                   (decayable-integrity result))
           (format t "Stability budget: ~,2f/~,2f~%~%" 
-                  *current-budget* *stability-budget*))
+            (interpreter-current-budget interp)
+            (interpreter-stability-budget interp)))
         
         (format t "4.2 Decay Mechanics Test~%")
         (format t "------------------------~%")
@@ -121,24 +122,34 @@ fast func process() {
         
         (format t "4.4 Stability Budget System Test~%")
         (format t "--------------------------------~%")
-        (format t "Initial budget: ~,2f/~,2f~%" *current-budget* *stability-budget*)
+        (format t "Initial budget: ~,2f/~,2f~%" 
+          (interpreter-current-budget interp)
+          (interpreter-stability-budget interp))
         
-        (check-stability-budget :stable-var)
-        (consume-stability-budget :stable-var)
-        (format t "After stable var: ~,2f/~,2f~%" *current-budget* *stability-budget*)
+        (check-stability-budget interp :stable-var-access)
+        (consume-stability-budget interp :stable-var-access)
+        (format t "After stable var: ~,2f/~,2f~%" 
+          (interpreter-current-budget interp)
+          (interpreter-stability-budget interp))
+
+        (check-stability-budget interp :volatile-var-access)
+        (consume-stability-budget interp  :volatile-var-access)
+        (format t "After volatile var: ~,2f/~,2f~%" 
+          (interpreter-current-budget interp)
+          (interpreter-stability-budget interp))
         
-        (check-stability-budget :volatile-var)
-        (consume-stability-budget :volatile-var)
-        (format t "After volatile var: ~,2f/~,2f~%" *current-budget* *stability-budget*)
-        
-        (restore-stability-budget 10.0)
-        (format t "After restoration: ~,2f/~,2f~%" *current-budget* *stability-budget*)
+        (restore-stability-budget interp 10.0)  
+(format t "After restoration: ~,2f/~,2f~%" 
+          (interpreter-current-budget interp)
+          (interpreter-stability-budget interp))
         
         (format t "~%Testing maintenance operations:~%")
-        (repair-target "test_variable")
-        (reinforce-target "test_function")
-        (accelerate-target "test_process")
-        (format t "Final budget: ~,2f/~,2f~%~%" *current-budget* *stability-budget*)
+        (evaluate interp (make-repair "test_variable"))
+        (evaluate interp (make-reinforce "test_function")) 
+        (evaluate interp (make-accelerate "test_process"))
+        (format t "Final budget: ~,2f/~,2f~%~%" 
+          (interpreter-current-budget interp)
+          (interpreter-stability-budget interp))
         
         (format t "4.5 Math Operations Test~%")
         (format t "------------------------~%")

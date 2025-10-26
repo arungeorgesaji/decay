@@ -1,5 +1,11 @@
 (defgeneric evaluate (interpreter node))
 
+(defun track-variable-type (interp var-name var-type)
+  (setf (gethash var-name (interpreter-variable-types interp)) var-type))
+
+(defun get-variable-type (interp var-name)
+  (gethash var-name (interpreter-variable-types interp) :unknown))
+
 (defmethod evaluate ((interp interpreter) (node program-node))
   (let ((result nil))
     (dolist (stmt (program-statements node))
@@ -7,6 +13,9 @@
     result))
 
 (defmethod evaluate ((interp interpreter) (node literal-node))
+  (check-stability-budget interp :literal-access)
+  (consume-stability-budget interp :literal-access)
+
   (let ((value (literal-value node)))
     (make-decayable value 
                     :integrity (if (numberp value) 1.0 0.9)
@@ -17,6 +26,9 @@
     (multiple-value-bind (value found) (gethash var-name (interpreter-current-env interp))
       (if found
           (progn
+            (let ((cost-type (determine-variable-cost-type interp var-name)))
+              (check-stability-budget interp cost-type)
+              (consume-stability-budget interp cost-type))
             (update-access-time value)
             (apply-decay value)
             value)
@@ -24,12 +36,18 @@
               (gethash var-name (interpreter-global-env interp))
             (if global-found
                 (progn
+                  (let ((cost-type (determine-variable-cost-type interp var-name)))
+                    (check-stability-budget interp cost-type)
+                    (consume-stability-budget interp cost-type))
                   (update-access-time global-value)
                   (apply-decay global-value)
                   global-value)
                 (error "Undefined variable: ~A" var-name)))))))
 
 (defmethod evaluate ((interp interpreter) (node function-call-node))
+  (check-stability-budget interp :function-call)
+  (consume-stability-budget interp :function-call)
+
   (let ((func-name (function-call-name node))
         (arg-values (mapcar (lambda (arg) (evaluate interp arg)) 
                            (function-call-arguments node))))
@@ -48,6 +66,9 @@
              (error "Undefined function: ~A" func-name)))))))
 
 (defmethod evaluate ((interp interpreter) (node return-node))
+  (check-stability-budget interp :control-flow)
+  (consume-stability-budget interp :control-flow)
+
   (let ((value (if (return-value node)
                    (evaluate interp (return-value node))
                    (make-decayable nil))))
@@ -66,6 +87,9 @@
     (setf (decayable-last-accessed decayable) (interpreter-cycle-count *interpreter-instance*))))
 
 (defmethod evaluate ((interp interpreter) (node binary-op-node))
+  (check-stability-budget interp :binary-operation)
+  (consume-stability-budget interp :binary-operation)
+
   (let* ((left-obj (evaluate interp (binary-op-left node)))
          (right-obj (evaluate interp (binary-op-right node)))
          (left (decayable-value left-obj))
@@ -103,6 +127,9 @@
       (t (error "Unknown operator: ~A" operator)))))
 
 (defmethod evaluate ((interp interpreter) (node unary-op-node))
+  (check-stability-budget interp :unary-operation)
+  (consume-stability-budget interp :unary-operation) 
+
   (let* ((right-obj (evaluate interp (unary-op-right node)))
          (right (decayable-value right-obj))
          (operator (unary-op-operator node))
@@ -120,6 +147,9 @@
     (otherwise (error "Unknown unary operator: ~A" operator))))
 
 (defmethod evaluate ((interp interpreter) (node if-node))
+  (check-stability-budget interp :control-flow)
+  (consume-stability-budget interp :control-flow)
+
   (let* ((condition-obj (evaluate interp (if-condition node)))
         (condition (decayable-value condition-obj)))
     (if (not (= condition 0))
@@ -128,6 +158,9 @@
           (evaluate interp (if-else node))))))
 
 (defmethod evaluate ((interp interpreter) (node while-node))
+  (check-stability-budget interp :control-flow)
+  (consume-stability-budget interp :control-flow)
+
   (let ((result nil))
     (loop while (not (= (decayable-value (evaluate interp (while-condition node))) 0))
           do (setf result (evaluate interp (while-body node))))
@@ -140,6 +173,9 @@
     (or result (make-decayable nil))))
 
 (defmethod evaluate ((interp interpreter) (node assignment-node))
+  (check-stability-budget interp :variable-assignment)
+  (consume-stability-budget interp :variable-assignment)
+
   (let* ((var-name (assignment-variable node))
          (value-obj (evaluate interp (assignment-value node)))
          (env (interpreter-current-env interp)))
@@ -148,6 +184,9 @@
     value-obj))
 
 (defmethod evaluate ((interp interpreter) (node variable-decl-node))
+  (check-stability-budget interp :variable-declaration)
+  (consume-stability-budget interp :variable-declaration)
+  
   (let* ((var-name (decl-name node))
          (value-obj (evaluate interp (decl-value node)))
          (var-type (decl-var-type node))
@@ -157,16 +196,57 @@
                        (volatile 0.01)
                        (t 0.005))))
     
+    (track-variable-type interp var-name var-type)
+    
     (setf (gethash var-name env) 
           (make-decayable (decayable-value value-obj)
                          :integrity (decayable-integrity value-obj)
                          :decay-rate decay-rate))
     value-obj))
 
+(defun determine-variable-cost-type (interp var-name)
+  (let ((var-type (get-variable-type interp var-name)))
+    (case var-type
+      (stable :stable-var-access)
+      (volatile :volatile-var-access)
+      (t :volatile-var-access))))
+
 (defmethod evaluate ((interp interpreter) (node function-decl-node))
+  (check-stability-budget interp :variable-declaration)
+  (consume-stability-budget interp :variable-declaration)
+
   (let ((func-name (decl-func-name node)))
     (setf (gethash func-name (interpreter-global-env interp)) node)
     (make-decayable func-name)))
+
+(defmethod evaluate ((interp interpreter) (node repair-node))
+  (check-stability-budget interp :maintenance-operation)
+  (consume-stability-budget interp :maintenance-operation) 
+
+  (let ((target (repair-target node)))
+    (format t "Repairing: ~A~%" target)
+    (sleep 2.0)
+    (restore-stability-budget interp 5.0)
+    (make-decayable (format nil "Repaired ~A" target))))
+
+(defmethod evaluate ((interp interpreter) (node reinforce-node))
+  (check-stability-budget interp :maintenance-operation)
+  (consume-stability-budget interp :maintenance-operation) 
+
+  (let ((target (reinforce-target node)))
+    (format t "Reinforcing: ~A~%" target)
+    ()
+    (restore-stability-budget interp 2.0)
+    (make-decayable (format nil "Reinforced ~A" target))))
+
+(defmethod evaluate ((interp interpreter) (node accelerate-node))
+  (check-stability-budget interp :maintenance-operation)
+  (consume-stability-budget interp :maintenance-operation) 
+
+  (let ((target (accelerate-target node)))
+    (format t "Accelerating: ~A~%" target)
+    (restore-stability-budget interp 1.0)
+    (make-decayable (format nil "Accelerated ~A" target))))
 
 (defun execute-function-call (interp func-node arg-values)
   (let* ((params (decl-parameters func-node))
