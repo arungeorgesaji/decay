@@ -1,0 +1,14 @@
+# Demonstrates arithmetic and comparison operations
+
+slow func main() {
+    stable x = 10
+    stable y = 5
+
+    if x > y {
+        return x - y
+    } else {
+        return y - x
+    }
+}
+
+main()

@@ -1,0 +1,5 @@
+# Hello World in decay language
+slow func main() {
+    stable message = "Hello, Decay!"
+    return message
+}

@@ -1,0 +1,17 @@
+# Demonstrates control flow and loops
+
+slow func main() {
+    stable count = 0
+
+    while count < 5 {
+        count = count + 1
+    }
+
+    if count == 5 {
+        return "Loop completed"
+    } else {
+        return "Loop error"
+    }
+}
+
+main()

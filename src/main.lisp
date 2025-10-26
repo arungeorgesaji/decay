@@ -33,8 +33,8 @@
                 (interpreter-current-budget interp)
                 (interpreter-stability-budget interp))))))
 
-(defun main (&optional args)
-  (if (and args (first args))
-      (let ((filename (second args)))
-        (run-decay-file filename))
-      (format t "Usage: decay <filename.decay>~%")))
+(defun main (args)
+  (let ((argv (rest args)))  
+    (if (and argv (first argv))
+        (run-decay-file (first argv))
+        (format t "Usage: decay <filename.decay>~%"))))

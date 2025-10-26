@@ -1,0 +1,14 @@
+# Demonstrates boolean operations and comparisons
+
+slow func main() {
+    stable a = true
+    stable b = false
+
+    if a != b {
+        return "Integrity maintained"
+    } else {
+        return "Corruption detected"
+    }
+}
+
+main()

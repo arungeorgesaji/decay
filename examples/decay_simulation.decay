@@ -1,0 +1,19 @@
+# Simulates ongoing decay and repair cycles
+
+slow func main() {
+    stable integrity = 100
+    volatile decayRate = 3
+
+    while integrity > 0 {
+        integrity = integrity - decayRate
+
+        if integrity < 50 {
+            repair(integrity)
+            reinforce(integrity)
+        }
+    }
+
+    return "System stabilized"
+}
+
+main()

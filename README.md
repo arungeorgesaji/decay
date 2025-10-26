@@ -41,9 +41,6 @@ fast func quickFunction(data) {
 - **Strings**: `"hello"`, `"decay language"`
 - **Booleans**: `true`, `false`
 
-**Complex Types:**
-- **Arrays**: `[1, 2, 3]`, `["a", "b", "c"]`
-
 ### 4. Operators
 
 **Arithmetic Operators:**
@@ -99,7 +96,6 @@ return value
 **Delimiters:**
 - `()` - Function calls and parameter lists
 - `{}` - Code blocks
-- `[]` - Array literals and indexing
 - `,` - Separator for parameters and array elements
 - `.` - Member access (for future object support)
 

@@ -1,0 +1,17 @@
+# Slow vs Fast function decay performance
+
+slow func slow_add(x, y) {
+    return x + y
+}
+
+fast func fast_mul(x, y) {
+    return x * y
+}
+
+slow func main() {
+    stable result1 = slow_add(3, 4)
+    stable result2 = fast_mul(3, 4)
+    return result1 + result2
+}
+
+main()

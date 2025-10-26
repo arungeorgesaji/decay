@@ -1,0 +1,13 @@
+# Demonstrates stable and volatile memory behavior
+
+slow func main() {
+    stable permanentValue = 42
+    volatile temporaryData = 3
+
+    temporaryData = temporaryData + 7
+    permanentValue = permanentValue * 2
+
+    return permanentValue + temporaryData
+}
+
+main()
