@@ -8,6 +8,10 @@
 (load "interpreter/environment.lisp")
 (load "interpreter/evaluation.lisp")
 
+(defun string-search (substring string)
+  (and (stringp substring) (stringp string) 
+       (search substring string)))
+
 (defun test-decay ()
   (let ((code "stable PI = 3.14159
 volatile temp = 0
@@ -159,15 +163,71 @@ fast func process() {
                 (format t "~A (expected: ~A)~%" (decayable-value result) expected))))
           (format t "~%"))
         
-        (format t "4.6 Function Definitions Test~%")
+        (format t "4.6 Function Test~%")
         (format t "-----------------------------~%")
-        (format t "Testing function declaration parsing...~%")
-        (let* ((func-tokens (tokenize "slow func test(a, b) { return a + b }"))
-              (func-ast (parse-tokens func-tokens)))
-          (format t "Function AST built successfully~%")
-          (print-ast func-ast)
-          (format t "~%"))
+
+        (let ((function-tests 
+       '(("Basic function call" 
+          "slow func add(a, b) { return a + b } result = add(5, 3)" 
+          "result" 8)
+         
+         ("Multiple parameters" 
+          "slow func multiply(a, b, c) { return a * b * c } product = multiply(2, 3, 4)" 
+          "product" 24)
+         
+         ("Function with conditionals" 
+          "slow func max(a, b) { if a > b { return a } return b } max_val = max(17, 42)" 
+          "max_val" 42)
+         
+         ("Global variable access" 
+          "stable counter = 100 slow func increment() { return counter + 1 } new_count = increment()" 
+          "new_count" 101)
+         
+         ("Nested function calls" 
+          "slow func square(x) { return x * x } slow func sum_squares(a, b) { return square(a) + square(b) } result = sum_squares(3, 4)" 
+          "result" 25)
+         
+         ("Fast vs Slow functions" 
+          "slow func slow_add(x) { return x + 10 } fast func fast_mul(x) { return x * 2 } slow_result = slow_add(5) fast_result = fast_mul(5)" 
+          "slow_result,fast_result" "slow:15 fast:10"))))
+  
+  (dolist (test function-tests)
+    (let ((test-name (first test))
+          (test-code (second test))
+          (result-var (third test))
+          (expected (fourth test)))
+      (format t "~A:~%" test-name)
+      (format t "  Code: ~A~%" test-code)
+      
+      (handler-case
+          (let* ((tokens (tokenize test-code))
+                 (ast (parse-tokens tokens))
+                 (result (evaluate interp ast)))
+            
+            (let ((actual-result 
+                   (cond
+                     ((string= test-name "Fast vs Slow functions")
+                      (let ((slow-result (gethash "slow_result" (interpreter-global-env interp)))
+                            (fast-result (gethash "fast_result" (interpreter-global-env interp))))
+                        (format nil "slow:~A fast:~A" 
+                                (decayable-value slow-result)
+                                (decayable-value fast-result))))
+                     (t
+                      (let ((result-value (gethash result-var (interpreter-global-env interp))))
+                        (decayable-value result-value))))))
+              
+              (format t "  Result: ~A~%" actual-result)
+              
+              (format t "  Status: ~A~%" 
+                      (if (equal actual-result expected)
+                          "PASS" 
+                          (format nil "FAIL (expected: ~A)" expected)))))
         
+        (error (e) 
+          (format t "  Status: ERROR: ~A~%" e)))
+      
+      (format t "~%"))))
+
         (format t "========================================~%")
         (format t "           TEST COMPLETE               ~%")
         (format t "========================================~%")

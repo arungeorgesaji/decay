@@ -20,7 +20,46 @@
             (update-access-time value)
             (apply-decay value)
             value)
-          (error "Undefined variable: ~A" var-name)))))
+          (multiple-value-bind (global-value global-found) 
+              (gethash var-name (interpreter-global-env interp))
+            (if global-found
+                (progn
+                  (update-access-time global-value)
+                  (apply-decay global-value)
+                  global-value)
+                (error "Undefined variable: ~A" var-name)))))))
+
+(defmethod evaluate ((interp interpreter) (node function-call-node))
+  (let ((func-name (function-call-name node))
+        (arg-values (mapcar (lambda (arg) (evaluate interp arg)) 
+                           (function-call-arguments node))))
+    
+    (cond
+      ((string= func-name "print")
+       (let ((output (format nil "~{~A~^ ~}" (mapcar #'decayable-value arg-values))))
+         (format t "~A~%" output)
+         (make-decayable output)))
+      
+      (t
+       (multiple-value-bind (func-node found) 
+           (gethash func-name (interpreter-global-env interp))
+         (if (and found (typep func-node 'function-decl-node))
+             (execute-function-call interp func-node arg-values)
+             (error "Undefined function: ~A" func-name)))))))
+
+(defmethod evaluate ((interp interpreter) (node return-node))
+  (let ((value (if (return-value node)
+                   (evaluate interp (return-value node))
+                   (make-decayable nil))))
+    (throw 'return value)))
+
+(defmethod evaluate ((interp interpreter) (node block-node))
+  (let ((result nil))
+    (dolist (stmt (block-statements node))
+      (setf result (catch 'return (evaluate interp stmt)))
+      (when (typep result 'decayable)
+        (return-from evaluate result)))
+    (or result (make-decayable nil))))
 
 (defun update-access-time (decayable)
   (when *interpreter-instance*
@@ -123,3 +162,31 @@
                          :integrity (decayable-integrity value-obj)
                          :decay-rate decay-rate))
     value-obj))
+
+(defmethod evaluate ((interp interpreter) (node function-decl-node))
+  (let ((func-name (decl-func-name node)))
+    (setf (gethash func-name (interpreter-global-env interp)) node)
+    (make-decayable func-name)))
+
+(defun execute-function-call (interp func-node arg-values)
+  (let* ((params (decl-parameters func-node))
+         (body (decl-body func-node))
+         (new-env (make-hash-table :test 'equal)))
+    
+    (loop for param in params
+          for arg in arg-values
+          do (setf (gethash param new-env) arg))
+    
+    (let ((old-env (interpreter-current-env interp))
+          (result (make-decayable nil)))
+      (unwind-protect
+           (progn
+             (setf (interpreter-current-env interp) new-env)
+             
+             (setf result 
+                   (catch 'return
+                     (evaluate interp body)
+                     (make-decayable nil))) 
+             )
+        (setf (interpreter-current-env interp) old-env))
+      result)))
