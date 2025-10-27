@@ -39,7 +39,6 @@ fast func quickFunction(data) {
 - **Integers**: `42`, `-17`, `0`
 - **Floats**: `3.14`, `-0.5`, `2.0`
 - **Strings**: `"hello"`, `"decay language"`
-- **Booleans**: `true`, `false`
 
 ### 4. Operators
 
@@ -108,10 +107,8 @@ return value
 ```decay
 stable criticalData = 100
 
-while true {
-    repair(criticalData)      # Restore corrupted values
-    reinforce(criticalData)   # Increase decay resistance
-}
+repair(criticalData)      # Restore corrupted values
+reinforce(criticalData)   # Increase decay resistance
 ```
 
 ---

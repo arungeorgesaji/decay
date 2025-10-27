@@ -51,11 +51,19 @@
          (make-decayable interp output)))
       
       (t
-       (multiple-value-bind (func-node found) 
-           (gethash func-name (interpreter-global-env interp))
-         (if (and found (typep func-node 'function-decl-node))
-             (execute-function-call interp func-node arg-values)
-             (error "Undefined function: ~A" func-name)))))))
+       (let ((func-obj (gethash func-name (interpreter-global-env interp))))
+         (cond
+           ((and func-obj (functionp (decayable-value func-obj)))
+            (apply (decayable-value func-obj) arg-values))
+           
+           ((and func-obj (typep (decayable-value func-obj) 'function-decl-node))
+            (execute-function-call interp (decayable-value func-obj) arg-values))
+
+           ((typep func-obj 'function-decl-node)
+            (execute-function-call interp func-obj arg-values))
+           
+           (t
+            (error "Undefined function: ~A" func-name))))))))
 
 (defmethod evaluate ((interp interpreter) (node return-node))
   (check-stability-budget interp :control-flow)
@@ -213,8 +221,9 @@
   (consume-stability-budget interp :variable-declaration)
 
   (let ((func-name (decl-func-name node)))
-    (setf (gethash func-name (interpreter-global-env interp)) node)
-    (make-decayable interp func-name)))
+    (let ((func-obj (make-decayable interp node)))
+      (setf (gethash func-name (interpreter-global-env interp)) func-obj)
+      func-obj)))
 
 (defmethod evaluate ((interp interpreter) (node repair-node))
   (check-stability-budget interp :maintenance-operation)

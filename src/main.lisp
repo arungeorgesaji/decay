@@ -8,11 +8,36 @@
 (load "src/interpreter/environment.lisp")
 (load "src/interpreter/evaluation.lisp")
 
+(defun repair-function (interp target)
+  (let ((obj (if (decayable-p target)
+                 target
+                 (gethash target (interpreter-global-env interp)))))
+    (when obj
+      (setf (decayable-integrity obj) 1.0))
+    obj))
+
+(defun reinforce-function (interp target)
+  (let ((obj (if (decayable-p target)
+                 target
+                 (gethash target (interpreter-global-env interp)))))
+    (when obj
+      (setf (decayable-decay-rate obj)
+            (* (decayable-decay-rate obj) 0.5)))
+    obj))
+
+(defun accelerate-function (interp target)
+  (let ((obj (if (decayable-p target)
+                 target
+                 (gethash target (interpreter-global-env interp)))))
+    (when obj
+      (setf (decayable-decay-rate obj)
+            (* (decayable-decay-rate obj) 2)))
+    obj))
+
+
 (defun run-decay-file (filename)
   (when (probe-file filename)
-    (let* ((source (with-open-file (in filename
-                                       :direction :input
-                                       :if-does-not-exist nil)
+    (let* ((source (with-open-file (in filename :direction :input :if-does-not-exist nil)
                      (when in
                        (with-output-to-string (out)
                          (loop for line = (read-line in nil)
@@ -20,6 +45,8 @@
                                do (format out "~A~%" line))))))
            (interp (make-instance 'interpreter)))
 
+      (register-builtin-functions interp)
+      
       (format t "~%Running: ~A~%" filename)
       (format t "==============================~%")
 
@@ -33,8 +60,8 @@
                 (interpreter-current-budget interp)
                 (interpreter-stability-budget interp))))))
 
-(defun main (args)
-  (let ((argv (rest args)))  
+(defun main (&optional args)
+  (let ((argv (rest args)))
     (if (and argv (first argv))
         (run-decay-file (first argv))
         (format t "Usage: decay <filename.decay>~%"))))
